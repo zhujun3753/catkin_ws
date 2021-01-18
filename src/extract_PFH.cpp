@@ -9,6 +9,8 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/features/normal_3d.h>
+#include <pcl/point_types.h>
+#include <pcl/features/pfh.h>
 /*PFH(Point Feature Histograms ) 点特征直方图           k近邻（距离小于半径r的点）
  * 1. PFH公式的目标是通过使用多维值直方图概括点周围的平均曲率来编码点的k邻域几何特性。
  * 这个高维的超空间为特征表示提供了一个信息性的特征，对下垫面的6D姿态是不变的(旋转，平移不变)，
@@ -30,20 +32,41 @@ bool descend (pcl::PointXYZ a,pcl::PointXYZ b) { return (a.y>b.y); }
 
 int main (int argc, char** argv)
 {
-  pcl::PointCloud<pcl::PointXYZ>::Ptr source_cloud (new pcl::PointCloud<pcl::PointXYZ> ());
-  pcl::io::loadPCDFile (argv[1], *source_cloud);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr source (new pcl::PointCloud<pcl::PointXYZ> ());
+  pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal> ());
+  pcl::NormalEstimation<PointT, pcl::Normal> ne;
+  pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT> ());
+
+  // 读取文件
+  pcl::io::loadPCDFile (argv[1], *source);
+// 计算法向量
+  ne.setSearchMethod (tree);
+  ne.setInputCloud (source);
+  ne.setKSearch (25);
+  ne.compute (*normals);
+
+   // 估计点特征直方图
+  pcl::PFHEstimation<pcl::PointXYZ, pcl::Normal, pcl::PFHSignature125> pfh;
+  pcl::PointCloud<pcl::PFHSignature125>::Ptr pfhs (new pcl::PointCloud<pcl::PFHSignature125> ());
+  pfh.setInputCloud (source);
+  pfh.setInputNormals (normals);
+  pfh.setSearchMethod (tree);
+  // Use all neighbors in a sphere of radius 5cm
+  // IMPORTANT: the radius used here has to be larger than the radius used to estimate the surface normals!!!
+  pfh.setRadiusSearch (0.05);
+  pfh.compute (*pfhs);
 
   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
   transform.translation() << 0, 0.0, 0.0;
   double theta =-M_PI/50;  // char *the=argv[2];
   transform.rotate (Eigen::AngleAxisf (theta, Eigen::Vector3f::UnitZ()));
   pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud (new pcl::PointCloud<pcl::PointXYZ> ());
-  pcl::transformPointCloud (*source_cloud, *transformed_cloud, transform);
-  source_cloud=transformed_cloud; // 更换指针指向的地址
+  pcl::transformPointCloud (*source, *transformed_cloud, transform);
+  source=transformed_cloud; // 更换指针指向的地址
 
   pcl::visualization::PCLVisualizer viewer ("View PCD");
-  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> source_cloud_color_handler (source_cloud, 255, 255, 255);
-  viewer.addPointCloud (source_cloud, source_cloud_color_handler, "original_cloud");
+  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> source_color_handler (source, 255, 255, 255);
+  viewer.addPointCloud (source, source_color_handler, "original_cloud");
   viewer.addCoordinateSystem (1.0);
   while (!viewer.wasStopped ()) { 
     viewer.spinOnce ();
