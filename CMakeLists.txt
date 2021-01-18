@@ -209,6 +209,9 @@ target_link_libraries (select ${PCL_LIBRARIES})
 
 add_executable (extract_PFH src/extract_PFH.cpp)
 target_link_libraries (extract_PFH ${PCL_LIBRARIES})
+
+# add_executable (feature_matching src/feature_matching.cpp)
+# target_link_libraries (feature_matching ${PCL_LIBRARIES})
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
