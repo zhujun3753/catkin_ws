@@ -9,12 +9,19 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/filters/passthrough.h>
 int main (int argc, char** argv)
 {
   // 读取点云数据
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
   pcl::io::loadPCDFile (argv[1], *cloud) ;
   std::cerr << "Point cloud data: " << cloud->size () << " points" << std::endl;
+  pcl::PassThrough<pcl::PointXYZ> pass;
+  pass.setInputCloud (cloud);
+  pass.setFilterFieldName ("z");
+  pass.setFilterLimits (0.6, 5);
+  pass.filter (*cloud);
+
 
   // 计算点云法向量
   pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;

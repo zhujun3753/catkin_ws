@@ -55,6 +55,7 @@ int main (int argc, char** argv)
   // IMPORTANT: the radius used here has to be larger than the radius used to estimate the surface normals!!!
   pfh.setRadiusSearch (0.05);
   pfh.compute (*pfhs);  //  // pfhs->points.size ()应该与input cloud->points.size ()有相同的大小，即每个点都有一个pfh特征向量
+  std::cerr<<std::endl<<*pfhs->begin()<<std::endl<<*pfhs->end()<<std::endl;
 
   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
   transform.translation() << 0, 0.0, 0.0;

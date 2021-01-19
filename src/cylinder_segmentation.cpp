@@ -127,7 +127,7 @@ cyl_seg_output cly_seg(const cyl_seg_input & parain)
   {
     std::cerr << "Cylinder coefficients: " << *coefficients_cylinder << std::endl;
 	  std::cerr << "PointCloud representing the cylindrical component: " << cloud_cylinder->size () << " data points." << std::endl;
-    writer.write ("cloud_cylinder.pcd", *cloud_cylinder, false);
+    // writer.write ("cloud_cylinder.pcd", *cloud_cylinder, false);
     resultout.exist_cly=true;
   }
 
@@ -220,9 +220,10 @@ int main (int argc, char** argv)
 // 可视化
  pcl::visualization::PCLVisualizer viewer ("Cylinder Segmentation");
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_filtered_color_handler (cloud_filtered, 255, 0, 0);
-  // viewer.addPointCloud (cloud_filtered, cloud_filtered_color_handler, "original_cloud");
+  viewer.addPointCloud (cloud_filtered, cloud_filtered_color_handler, "original_cloud");
   viewer.addPointCloudNormals<pcl::PointXYZ,pcl::Normal>(cloud_filtered, cloud_normals);
-  viewer.addCube(0,1,-40,0,0,1,0,0,1,"cube");
+
+  // viewer.addCube(0,1,-40,0,0,1,0,0,1,"cube");
   viewer.addCoordinateSystem (1.0);
   cyl_seg_input parain;
   cyl_seg_output resultout;
@@ -230,14 +231,14 @@ int main (int argc, char** argv)
   // pcl::copyPointCloud(*cloud_filtered,*parain.cloud_filtered);
   parain.cloud_filtered=cloud_filtered; // 可以不用copy函数，因为下面的使用并没有修改指针指向的地址的数据！
   parain.cloud_normals=cloud_normals; // pcl没有复制点云法向量的函数，
-  plot2d(parain);
-  std::cerr << "sdacsdc" <<std::endl;
+  // plot2d(parain);
+  // std::cerr << "sdacsdc" <<std::endl;
   resultout.exist_cly=true;
   int times=0;
   while(resultout.exist_cly||times<24)
   {
     resultout=cly_seg(parain);
-    return 0;
+    // return 0;
     if (!resultout.exist_cly)
     {
     //   pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;

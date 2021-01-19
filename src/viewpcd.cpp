@@ -80,7 +80,7 @@ int main (int argc, char** argv)
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> source_cloud_color_handler (source_cloud, 255, 255, 255);
   // We add the point cloud to the viewer and pass the color handler
   viewer.addPointCloud (source_cloud, source_cloud_color_handler, "original_cloud");
-  viewer.addCoordinateSystem (1.0);
+  viewer.addCoordinateSystem (8.0);
   
   std::sort(source_cloud->begin(),source_cloud->end(),descend);
   
