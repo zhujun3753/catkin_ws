@@ -11,6 +11,11 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/point_types.h>
 #include <pcl/features/pfh.h>
+#include <pcl/segmentation/extract_clusters.h>
+#include <fstream>
+#include <limits.h>
+#include <pcl/visualization/pcl_plotter.h>
+
 /*PFH(Point Feature Histograms ) 点特征直方图           k近邻（距离小于半径r的点）
  * 1. PFH公式的目标是通过使用多维值直方图概括点周围的平均曲率来编码点的k邻域几何特性。
  * 这个高维的超空间为特征表示提供了一个信息性的特征，对下垫面的6D姿态是不变的(旋转，平移不变)，
@@ -28,17 +33,23 @@
  * 
  */
 typedef pcl::PointXYZ PointT;
-bool descend (pcl::PointXYZ a,pcl::PointXYZ b) { return (a.y>b.y); }
-
-int main (int argc, char** argv)
+struct Data
 {
-  pcl::PointCloud<pcl::PointXYZ>::Ptr source (new pcl::PointCloud<pcl::PointXYZ> ());
-  pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal> ());
-  pcl::NormalEstimation<PointT, pcl::Normal> ne;
-  pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT> ());
+  std::vector<double> n,his;
+};
 
-  // 读取文件
-  pcl::io::loadPCDFile (argv[1], *source);
+bool descend (pcl::PointXYZ a,pcl::PointXYZ b) { return (a.z>b.z); }
+pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT> ());
+pcl::PFHEstimation<pcl::PointXYZ, pcl::Normal, pcl::PFHSignature125> pfh;
+pcl::NormalEstimation<PointT, pcl::Normal> ne;
+
+Data plot_pfh(pcl::PointCloud<pcl::PointXYZ>::Ptr source,  int bias=0)
+{
+  Data data;
+  pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal> ());
+  
+  
+  // std::sort(source->begin(),source->end(),descend);
 // 计算法向量
   ne.setSearchMethod (tree);
   ne.setInputCloud (source);
@@ -46,7 +57,7 @@ int main (int argc, char** argv)
   ne.compute (*normals);
 
    // 估计点特征直方图
-  pcl::PFHEstimation<pcl::PointXYZ, pcl::Normal, pcl::PFHSignature125> pfh;
+  
   pcl::PointCloud<pcl::PFHSignature125>::Ptr pfhs (new pcl::PointCloud<pcl::PFHSignature125> ());
   pfh.setInputCloud (source);
   pfh.setInputNormals (normals);
@@ -55,22 +66,110 @@ int main (int argc, char** argv)
   // IMPORTANT: the radius used here has to be larger than the radius used to estimate the surface normals!!!
   pfh.setRadiusSearch (0.05);
   pfh.compute (*pfhs);  //  // pfhs->points.size ()应该与input cloud->points.size ()有相同的大小，即每个点都有一个pfh特征向量
-  std::cerr<<std::endl<<*pfhs->begin()<<std::endl<<*pfhs->end()<<std::endl;
+  // std::cerr<<std::endl<<*pfhs->begin()<<std::endl<<*pfhs->end()<<std::endl;
+  float histogram[125];
+  // ofstream OutFile("Test.txt"); 
+  for(const auto & pf:*pfhs)
+  {
+    for(int ele=0;ele<125;ele++)
+    {
+        // OutFile <<std::to_string(pf.histogram[ele])<<"  ";;
+        histogram[ele]=(histogram[ele]+pf.histogram[ele]>FLT_MAX)?FLT_MAX:histogram[ele]+pf.histogram[ele];
+    }
+    // OutFile <<std::endl<<std::endl;;
+  }
+  // OutFile.close();
+
+  std::vector<double> n,his;
+  std::cerr<<std::endl;
+  for(int ele=0;ele<125;ele++)  
+  {
+    if(histogram[ele]>1)
+    {
+      std::cerr<<histogram[ele]<<"  ";
+      n.push_back(ele+bias);
+      his.push_back(histogram[ele]);
+    }
+  }
+  data.n=n;
+  data.his=his;
+  // plot_->addPlotData(n, his, name, vtkChart::LINE);//X,Y均为double型的向量
+  return data;
+}
+
+int main (int argc, char** argv)
+{
+  pcl::PointCloud<pcl::PointXYZ>::Ptr source (new pcl::PointCloud<pcl::PointXYZ> ());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr source2 (new pcl::PointCloud<pcl::PointXYZ> ());
+  
+  // 读取文件
+  pcl::io::loadPCDFile (argv[1], *source);
+  pcl::io::loadPCDFile (argv[2], *source2);
 
   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
-  transform.translation() << 0, 0.0, 0.0;
-  double theta =-M_PI/50;  // char *the=argv[2];
+  transform.translation() << 1, 0.0, 0.0;
+  double theta =-M_PI/2;  // char *the=argv[2];
   transform.rotate (Eigen::AngleAxisf (theta, Eigen::Vector3f::UnitZ()));
   pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud (new pcl::PointCloud<pcl::PointXYZ> ());
-  pcl::transformPointCloud (*source, *transformed_cloud, transform);
-  source=transformed_cloud; // 更换指针指向的地址
+  pcl::transformPointCloud (*source, *transformed_cloud, transform); 
 
-  pcl::visualization::PCLVisualizer viewer ("View PCD");
-  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> source_color_handler (source, 255, 255, 255);
-  viewer.addPointCloud (source, source_color_handler, "original_cloud");
-  viewer.addCoordinateSystem (1.0);
-  while (!viewer.wasStopped ()) { 
-    viewer.spinOnce ();
-  }
+  pcl::visualization::PCLPlotter *plot_(new pcl::visualization::PCLPlotter("Elevation "));
+  pcl::visualization::PCLPlotter *plot_2(new pcl::visualization::PCLPlotter("Elevation and Point Number Breakdown Map"));
+  
+	// plot_->setBackgroundColor(1, 1, 1);
+  // plot_->setShowLegend(true);
+  // plot_->plot();
+  
+  // while (plot_->wasStopped())
+  // {
+    Data data,data2;
+    data=plot_pfh(source);	
+    data2=plot_pfh(transformed_cloud,0);	
+    plot_->addPlotData(data.n,data.his);
+    plot_->plot();
+    plot_2->addPlotData(data2.n,data2.his);
+    plot_2->plot();
+	  //绘制曲线
+    // plot_->spinOnce(2000);
+    // plot_->clearPlots();
+  // }
+  
+  // plot_->wasStopped()
+
+  // pcl::visualization::PCLPlotter *plot2(new pcl::visualization::PCLPlotter("Elevation and Point Number Breakdown Map"));
+	// plot2->setBackgroundColor(1, 1, 1);
+	// plot2->setTitle("Elevation and Point Number Breakdown Map");
+	// plot2->setXTitle("Elevation");
+	// plot2->setYTitle("Point number");
+	// plot2->addPlotData(n, his, "display", vtkChart::LINE);//X,Y均为double型的向量
+	// plot2->plot();//绘制曲线
+  // plot_->wasStopped()
+
+
+
+  // while (!viewer.wasStopped ()) { // Display the visualiser until 'q' key is pressed
+  //   viewer.spinOnce ();
+  // }
+  
+
+
+
+
+  // Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+  // transform.translation() << 0, 0.0, 0.0;
+  // double theta =-M_PI/50;  // char *the=argv[2];
+  // transform.rotate (Eigen::AngleAxisf (theta, Eigen::Vector3f::UnitZ()));
+  // pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud (new pcl::PointCloud<pcl::PointXYZ> ());
+  // pcl::transformPointCloud (*source, *transformed_cloud, transform);
+  // source=transformed_cloud; // 更换指针指向的地址
+
+
+  // pcl::visualization::PCLVisualizer viewer ("View PCD");
+  // pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> source_color_handler (source, 255, 255, 255);
+  // viewer.addPointCloud (source, source_color_handler, "original_cloud");
+  // viewer.addCoordinateSystem (1.0);
+  // while (!viewer.wasStopped ()) { 
+  //   viewer.spinOnce ();
+  // }
   return 0;
 }

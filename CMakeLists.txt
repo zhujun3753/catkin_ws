@@ -210,6 +210,12 @@ target_link_libraries (select ${PCL_LIBRARIES})
 add_executable (extract_PFH src/extract_PFH.cpp)
 target_link_libraries (extract_PFH ${PCL_LIBRARIES})
 
+
+add_executable (cluster_extraction src/cluster_extraction.cpp)
+target_link_libraries (cluster_extraction ${PCL_LIBRARIES})
+
+add_executable (plot_test src/plot_test.cpp)
+target_link_libraries (plot_test ${PCL_LIBRARIES})
 # add_executable (feature_matching src/feature_matching.cpp)
 # target_link_libraries (feature_matching ${PCL_LIBRARIES})
 ## Specify libraries to link a library or executable target against

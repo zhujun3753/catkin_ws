@@ -221,6 +221,7 @@ int main (int argc, char** argv)
  pcl::visualization::PCLVisualizer viewer ("Cylinder Segmentation");
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_filtered_color_handler (cloud_filtered, 255, 0, 0);
   viewer.addPointCloud (cloud_filtered, cloud_filtered_color_handler, "original_cloud");
+  pcl::io::savePCDFileASCII ("cloud_filtered.pcd", *cloud_filtered);
   viewer.addPointCloudNormals<pcl::PointXYZ,pcl::Normal>(cloud_filtered, cloud_normals);
 
   // viewer.addCube(0,1,-40,0,0,1,0,0,1,"cube");

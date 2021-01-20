@@ -2,7 +2,7 @@
 #include <pcl/features/3dsc.h>
 #include <pcl/features/fpfh_omp.h>
 #include <pcl/features/pfh.h>
-#include <pcl/features/pfhrgb.h>
+#include <pcl/features/pfhbeginrgb.h>
 #include <pcl/features/shot_omp.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/keypoints/harris_3d.h>
