@@ -22,7 +22,7 @@
 #include <cstdlib>
 #include <pcl/visualization/pcl_plotter.h>// 直方图的可视化 方法2
 #include <pcl/registration/sample_consensus_prerejective.h>   // pose estimate
-#include <pcl/keypoints/sift_keypoint.h>   // shift关键点相关
+#include <pcl/keypoints/sift_keypoint.h>   // sift关键点相关
 #include <pcl/pcl_macros.h>
 #include <pcl/keypoints/harris_3d.h>
 
@@ -106,16 +106,16 @@ void compute_harris(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,pcl::PointCloud<pc
     else
         pcl::console::print_warn ("Keypoints indices are empty!\n");
 }
-// 计算shift特征
+// 计算sift特征
 void
-compute_shift(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,pcl::PointCloud<pcl::PointXYZ>::Ptr keypoints)
+compute_sift(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,pcl::PointCloud<pcl::PointXYZ>::Ptr keypoints)
 {
     clock_t start = clock();
 
-    const float min_scale = 1;             //设置尺度空间中最小尺度的标准偏差
+    const float min_scale = 0.01f;             //设置尺度空间中最小尺度的标准偏差
     const int n_octaves = 3;               //设置高斯金字塔组（octave）的数目
-    const int n_scales_per_octave =1;     //设置每组（octave）计算的尺度
-    const float min_contrast = 0.02;          //设置限制关键点检测的阈值
+    const int n_scales_per_octave =4;     //设置每组（octave）计算的尺度
+    const float min_contrast = 0.001f;          //设置限制关键点检测的阈值
 
     pcl::SIFTKeypoint<pcl::PointXYZ, pcl::PointWithScale> sift;//创建sift关键点检测对象
     pcl::PointCloud<pcl::PointWithScale> result;
@@ -262,12 +262,12 @@ compute_shot(pcl::PointCloud<pcl::PointXYZ>::Ptr keypoints, pcl::PointCloud<pcl:
 // input: modelDescriptors,sceneDescriptors
 // output: pcl::CorrespondencesPtr
 void
-find_match(pcl::PointCloud<pcl::FPFHSignature33>::Ptr model_descriptors,pcl::PointCloud<pcl::FPFHSignature33>::Ptr scene_descriptors,pcl::CorrespondencesPtr model_scene_corrs)
+find_match_fpfh(pcl::PointCloud<pcl::FPFHSignature33>::Ptr model_descriptors_fpfh,pcl::PointCloud<pcl::FPFHSignature33>::Ptr scene_descriptors,pcl::CorrespondencesPtr model_scene_corrs)
 {
     clock_t start = clock();
 
     pcl::KdTreeFLANN<pcl::FPFHSignature33> matching;
-    matching.setInputCloud(model_descriptors);
+    matching.setInputCloud(model_descriptors_fpfh);
 
     for (size_t i = 0; i < scene_descriptors->size(); ++i)
     {
@@ -288,11 +288,14 @@ find_match(pcl::PointCloud<pcl::FPFHSignature33>::Ptr model_descriptors,pcl::Poi
             }
         }
     }
-
-    std::cout << "Found " << model_scene_corrs->size() << " FPFH correspondences." << std::endl;
+    if(model_scene_corrs->size() ==0)
+        pcl::console::print_warn ("\nNo FPFH correspondences !!\n");
+    else
+        std::cout << "Found " << model_scene_corrs->size() << " FPFH correspondences." << std::endl;
     clock_t end = clock();
     cout<<"Time match: "<< (double)(end - start) / CLOCKS_PER_SEC <<endl;
     cout<<"-----------------------------"<<endl;
+    
 }
 
 
@@ -319,7 +322,7 @@ find_match_shot(pcl::PointCloud<pcl::SHOT352>::Ptr model_descriptors,pcl::PointC
             int neighborCount = matching.nearestKSearch(scene_descriptors->at(i), 1, neighbors, squaredDistances);
             // ...and add a new correspondence if the distance is less than a threshold
             // (SHOT distances are between 0 and 1, other descriptors use different metrics).
-            if (neighborCount == 1 && squaredDistances[0] < 0.05f)
+            if (neighborCount == 1 && squaredDistances[0] < 0.1f)
             {
                 pcl::Correspondence correspondence(neighbors[0], static_cast<int>(i), squaredDistances[0]);
                 model_scene_corrs->push_back(correspondence);
@@ -328,10 +331,15 @@ find_match_shot(pcl::PointCloud<pcl::SHOT352>::Ptr model_descriptors,pcl::PointC
         }
     }
 
-    std::cout << "Found " << model_scene_corrs->size() << " SHOT correspondences." << std::endl;
+    
+    if(model_scene_corrs->size() ==0)
+        pcl::console::print_warn ("\nNo SHOT correspondences !!\n");
+    else
+        std::cout << "Found " << model_scene_corrs->size() << " SHOT correspondences." << std::endl;
     clock_t end = clock();
     cout<<"Time match: "<< (double)(end - start) / CLOCKS_PER_SEC <<endl;
     cout<<"-----------------------------"<<endl;
+        
 }
 
 
@@ -367,7 +375,11 @@ find_match_pfh(pcl::PointCloud<pcl::PFHSignature125>::Ptr model_descriptors,pcl:
         }
     }
 
-    std::cout << "Found " << model_scene_corrs->size() << " PFH  correspondences." << std::endl;
+    
+    if(model_scene_corrs->size() ==0)
+        pcl::console::print_warn ("\nNo PFH correspondences !!\n");
+    else
+        std::cout << "Found " << model_scene_corrs->size() << " PFH  correspondences." << std::endl;
     clock_t end = clock();
     cout<<"Time match: "<< (double)(end - start) / CLOCKS_PER_SEC <<endl;
     cout<<"-----------------------------"<<endl;
@@ -515,15 +527,15 @@ int main(int argc, char** argv)
 
     pcl::PointCloud<pcl::SHOT352>::Ptr model_descriptors_shot(new pcl::PointCloud<pcl::SHOT352>());  // shot特征
     pcl::PointCloud<pcl::SHOT352>::Ptr scene_descriptors_shot(new pcl::PointCloud<pcl::SHOT352>());
-    pcl::PointCloud<pcl::FPFHSignature33>::Ptr model_descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());  // fpfh特征
-    pcl::PointCloud<pcl::FPFHSignature33>::Ptr scene_descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
+    pcl::PointCloud<pcl::FPFHSignature33>::Ptr model_descriptors_fpfh(new pcl::PointCloud<pcl::FPFHSignature33>());  // fpfh特征
+    pcl::PointCloud<pcl::FPFHSignature33>::Ptr scene_descriptors_fpfh(new pcl::PointCloud<pcl::FPFHSignature33>());
     pcl::PointCloud<pcl::PFHSignature125>::Ptr model_descriptors_pfh(new pcl::PointCloud<pcl::PFHSignature125>());  // pfh特征
     pcl::PointCloud<pcl::PFHSignature125>::Ptr scene_descriptors_pfh(new pcl::PointCloud<pcl::PFHSignature125>());
 
     PointCloud::Ptr model_keypoint(new PointCloud);                 // iss关键点
     PointCloud::Ptr scene_keypoint(new PointCloud);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr model_keypoints_shift(new pcl::PointCloud<pcl::PointXYZ>);  // shift关键点
-    pcl::PointCloud<pcl::PointXYZ>::Ptr scene_keypoints_shift(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr model_keypoints_sift(new pcl::PointCloud<pcl::PointXYZ>);  // sift关键点
+    pcl::PointCloud<pcl::PointXYZ>::Ptr scene_keypoints_sift(new pcl::PointCloud<pcl::PointXYZ>);
 
     PointCloud::Ptr cloud_src_model(new PointCloud);    //model点云  读入
     PointCloud::Ptr cloud_src_scene(new PointCloud);    //scene点云
@@ -565,42 +577,51 @@ int main(int argc, char** argv)
     est_normals(model,model_normals);
     est_normals(scene,scene_normals);
 
-    // 计算关键点
-    compute_iss(model,model_keypoint);
-    compute_iss(scene,scene_keypoint);
+    //  iss关键点
+    // compute_iss(model,model_keypoint);  
+    // compute_iss(scene,scene_keypoint); 
+    //  harris关键点
     // compute_harris(model,model_keypoint);
     // compute_harris(scene,scene_keypoint);
-    std::cerr<<"model 关键点数量 "<<model_keypoint->size()
-        <<"scene 关键点数量 "<<scene_keypoint->size()<<std::endl;
-    if(model_keypoint->size()==0||scene_keypoint->size()==0) return 0;
+    // sift关键点
+    compute_sift(model,model_keypoint);
+    compute_sift(scene,scene_keypoint);
 
-    // 根据关键点计算特征
-    compute_fpfh(model_keypoint,model,model_normals,model_descriptors);   // fpfh特征
-    compute_fpfh(scene_keypoint,scene,scene_normals,scene_descriptors);
-    compute_shot(model_keypoint,model,model_normals,model_descriptors_shot);   // shot特征
-    compute_shot(scene_keypoint,scene,scene_normals,scene_descriptors_shot);
-    find_match(model_descriptors,scene_descriptors,model_scene_corrs);        // fpfh
-    find_match_shot(model_descriptors_shot,scene_descriptors_shot,model_scene_corrs);           // shot
+    if(model_keypoint->size()==0||scene_keypoint->size()==0) 
+    {
+        pcl::console::print_warn ("\nNo keypoints  !!\n");
+        return 0;
+    }
+    // PFH描述子
+     compute_pfh(model_keypoint,model,model_normals,model_descriptors_pfh);
+     compute_pfh(scene_keypoint,scene,scene_normals,scene_descriptors_pfh);
+    // FPFH描述子
+    compute_fpfh(model_keypoint,model,model_normals,model_descriptors_fpfh);   
+    compute_fpfh(scene_keypoint,scene,scene_normals,scene_descriptors_fpfh); 
+    // SHOT描述子
+    compute_shot(model_keypoint,model,model_normals,model_descriptors_shot); 
+    compute_shot(scene_keypoint,scene,scene_normals,scene_descriptors_shot); 
 
-    compute_shift(model,model_keypoints_shift);
-    compute_shift(scene,scene_keypoints_shift);
-    if(model_keypoints_shift->size()>0&&scene_keypoints_shift->size()>0)
-    {
-        compute_pfh(model_keypoints_shift,model,model_normals,model_descriptors_pfh);   // pfh
-        compute_pfh(scene_keypoints_shift,scene,scene_normals,scene_descriptors_pfh);
-        if(model_descriptors_pfh->size()>0&&scene_descriptors_pfh->size()>0)
-            find_match_pfh(model_descriptors_pfh,scene_descriptors_pfh,model_scene_corrs); 
-    }
-    else
-    {
-        std::cerr<<"No SHIFT keypoints !!"<<std::endl;
-    }
+    // 匹配PFH特征
+    if(model_descriptors_pfh->size()>0&&scene_descriptors_pfh->size()>0)
+        find_match_pfh(model_descriptors_pfh,scene_descriptors_pfh,model_scene_corrs);      
+    // 匹配FPFH特征
+    if(model_descriptors_fpfh->size()>0&&scene_descriptors_fpfh->size()>0)
+        find_match_fpfh(model_descriptors_fpfh,scene_descriptors_fpfh,model_scene_corrs);   
+     // 匹配SHOT特征
+    if(model_descriptors_shot->size()>0&&scene_descriptors_shot->size()>0)
+        find_match_shot(model_descriptors_shot,scene_descriptors_shot,model_scene_corrs);
     
-    estimationPose(model_keypoint,scene_keypoint,model_descriptors,scene_descriptors,aligned_model);
+    // 位姿估计
+    if(model_descriptors_fpfh->size()>0&&scene_descriptors_fpfh->size()>0)
+        estimationPose(model_keypoint,scene_keypoint,model_descriptors_fpfh,scene_descriptors_fpfh,aligned_model);
 
-    visualize_corrs(model_keypoint,scene_keypoint,model,scene,model_scene_corrs);  // 可视化对应关系
+    // 可视化输出
+    if(model_scene_corrs->size()>0)
+        visualize_corrs(model_keypoint,scene_keypoint,model,scene,model_scene_corrs);  // 可视化对应关系
     visualize_pcd(model,model_keypoint,scene, scene_keypoint);  // 降采样后的点云 , 特征点
-    visualize_Histogram(model_descriptors,scene_descriptors);   // 可视化fpfh直方图
+    if(model_descriptors_fpfh->size()>3&&scene_descriptors_fpfh->size()>3)
+        visualize_Histogram(model_descriptors_fpfh,scene_descriptors_fpfh);   // 可视化fpfh直方图
 
     return 0;
 }
