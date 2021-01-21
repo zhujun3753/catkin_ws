@@ -48,7 +48,7 @@ bool use_hough_ (true);
 float model_radius_search (0.02f);
 float scene_radius_search (0.02f);
 float ref_frame_rad_ (0.015f);
-float descr_rad_ (0.02f);
+float descr_rad_ (0.05f);   // 0.02f
 float cg_size_ (0.01f);
 float cg_thresh_ (5.0f);
 int icp_max_iter_ (5);
@@ -205,11 +205,13 @@ int main (int argc, char *argv[])
   uniform_sampling.setInputCloud (model);
   uniform_sampling.setRadiusSearch (model_radius_search);
   uniform_sampling.filter (*model_downsampled);
+  // model_downsampled=model;
   std::cout << "Model total points: " << model->size () << "; Downsampled points: " << model_downsampled->size () << std::endl;
 
   uniform_sampling.setInputCloud (scene);
   uniform_sampling.setRadiusSearch (scene_radius_search);
   uniform_sampling.filter (*scene_downsampled);
+  // scene_downsampled=scene;
   std::cout << "Scene total points: " << scene->size () << "; Downsampled points: " << scene_downsampled->size () << std::endl;
 
   /**
@@ -250,7 +252,8 @@ int main (int argc, char *argv[])
     // 设定k值，以寻找待搜索点的k个最近临点, 这里k=1
     // k个最近临点的索引
     // k个最近临点到搜索点距离的平方
-    if (found_neighs == 1 && neigh_sqr_dists[0] < 0.25f)
+    // std::cerr<<found_neighs<<"个"<<std::endl;
+    if (found_neighs == 1 && neigh_sqr_dists[0] < 0.5)  //  0.25
     {
       pcl::Correspondence corr (neigh_indices[0], static_cast<int> (i), neigh_sqr_dists[0]);
       model_scene_corrs->push_back (corr);
@@ -264,6 +267,8 @@ int main (int argc, char *argv[])
   pcl::copyPointCloud (*scene_downsampled, scene_good_keypoints_indices, *scene_good_kpt);
 
   std::cout << "Correspondences found: " << model_scene_corrs->size () << std::endl;
+  std::cout << "Model total points: " << model->size () << "; Downsampled points: " << model_downsampled->size () << std::endl;
+  std::cout << "Scene total points: " << scene->size () << "; Downsampled points: " << scene_downsampled->size () << std::endl;
 
   /**
    *  Clustering

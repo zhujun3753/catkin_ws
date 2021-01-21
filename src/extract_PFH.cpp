@@ -53,7 +53,7 @@ Data plot_pfh(pcl::PointCloud<pcl::PointXYZ>::Ptr source,  int bias=0)
 // 计算法向量
   ne.setSearchMethod (tree);
   ne.setInputCloud (source);
-  ne.setKSearch (25);
+  ne.setKSearch (10);
   ne.compute (*normals);
 
    // 估计点特征直方图
@@ -64,7 +64,7 @@ Data plot_pfh(pcl::PointCloud<pcl::PointXYZ>::Ptr source,  int bias=0)
   pfh.setSearchMethod (tree);
   // Use all neighbors in a sphere of radius 5cm
   // IMPORTANT: the radius used here has to be larger than the radius used to estimate the surface normals!!!
-  pfh.setRadiusSearch (0.05);
+  pfh.setKSearch (10);
   pfh.compute (*pfhs);  //  // pfhs->points.size ()应该与input cloud->points.size ()有相同的大小，即每个点都有一个pfh特征向量
   // std::cerr<<std::endl<<*pfhs->begin()<<std::endl<<*pfhs->end()<<std::endl;
   float histogram[125];
@@ -104,7 +104,7 @@ int main (int argc, char** argv)
   
   // 读取文件
   pcl::io::loadPCDFile (argv[1], *source);
-  pcl::io::loadPCDFile (argv[2], *source2);
+  if(argc==3) pcl::io::loadPCDFile (argv[2], *source2);
 
   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
   transform.translation() << 1, 0.0, 0.0;
@@ -116,19 +116,25 @@ int main (int argc, char** argv)
   pcl::visualization::PCLPlotter *plot_(new pcl::visualization::PCLPlotter("Elevation "));
   pcl::visualization::PCLPlotter *plot_2(new pcl::visualization::PCLPlotter("Elevation and Point Number Breakdown Map"));
   
-	// plot_->setBackgroundColor(1, 1, 1);
-  // plot_->setShowLegend(true);
+	plot_->setBackgroundColor(1, 1, 1);
+  plot_->setShowLegend(true);
   // plot_->plot();
   
-  // while (plot_->wasStopped())
-  // {
+
     Data data,data2;
     data=plot_pfh(source);	
-    data2=plot_pfh(transformed_cloud,0);	
+    std::cerr<<argc<<std::endl;
+    if(argc==3) data2=plot_pfh(source2,0);
+    else data2=plot_pfh(transformed_cloud,1);
+    	
     plot_->addPlotData(data.n,data.his);
+    // plot_->spinOnce(5000);
+    plot_->addPlotData(data2.n,data2.his);
     plot_->plot();
-    plot_2->addPlotData(data2.n,data2.his);
-    plot_2->plot();
+    // plot_->spinOnce(50000);
+
+    
+
 	  //绘制曲线
     // plot_->spinOnce(2000);
     // plot_->clearPlots();

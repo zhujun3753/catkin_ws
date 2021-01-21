@@ -108,7 +108,7 @@ cyl_seg_output cly_seg(const cyl_seg_input & parain)
   seg.setNormalDistanceWeight (0.1); // Set the relative weight (between 0 and 1) to give to the angular distance (0 to pi/2) between point normals and the plane normal.
   seg.setMaxIterations (10000); 
   seg.setDistanceThreshold (0.04);
-  seg.setRadiusLimits (0.32, 0.35);
+  seg.setRadiusLimits (0.32, 0.35); // 0.32,0.35
   seg.setInputCloud (parain.cloud_filtered);
   seg.setInputNormals (parain.cloud_normals);
   seg.segment (*inliers_cylinder, *coefficients_cylinder);// Obtain the cylinder inliers and coefficients指向点的索引的指针，并不是指向点的指针
@@ -221,7 +221,7 @@ int main (int argc, char** argv)
  pcl::visualization::PCLVisualizer viewer ("Cylinder Segmentation");
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_filtered_color_handler (cloud_filtered, 255, 0, 0);
   viewer.addPointCloud (cloud_filtered, cloud_filtered_color_handler, "original_cloud");
-  pcl::io::savePCDFileASCII ("cloud_filtered.pcd", *cloud_filtered);
+//   pcl::io::savePCDFileASCII ("cloud_filtered.pcd", *cloud_filtered);
   viewer.addPointCloudNormals<pcl::PointXYZ,pcl::Normal>(cloud_filtered, cloud_normals);
 
   // viewer.addCube(0,1,-40,0,0,1,0,0,1,"cube");
@@ -238,42 +238,60 @@ int main (int argc, char** argv)
   int times=0;
   while(resultout.exist_cly||times<24)
   {
-    resultout=cly_seg(parain);
-    // return 0;
-    if (!resultout.exist_cly)
-    {
-    //   pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
-    //   sor.setInputCloud (parain.cloud_filtered);
-    //   sor.setMeanK (50);
-    //   sor.setStddevMulThresh (1.0);
-    //   sor.filter (*parain.cloud_filtered);
+	resultout=cly_seg(parain);
+	// return 0;
+	if (!resultout.exist_cly)
+	{
+		//   pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+		//   sor.setInputCloud (parain.cloud_filtered);
+		//   sor.setMeanK (50);
+		//   sor.setStddevMulThresh (1.0);
+		//   sor.filter (*parain.cloud_filtered);
 
-    //   // 估计点的法向量
-    //   ne.setSearchMethod (tree);
-    //   ne.setInputCloud (parain.cloud_filtered);
-    //   ne.setKSearch (25);
-    //   ne.compute (*parain.cloud_normals);
-      break;
-    }
-    parain.cloud_filtered=resultout.cloud_filtered2; // 只是给parain指针换了指向的地址，并没有修改原来指针指向的数据。
-    parain.cloud_normals=resultout.cloud_normals2; // 因为每次resultout都是新分配的地址，所以这样指向没有问题
-     times++;
-    std::string cly_id="cloud_cylinder"+std::to_string(times);
-    std::cerr << "圆柱个数: " << cly_id<< std::endl;
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_cylinder_color_handler (resultout.cloud_cylinder, 0, 0, 255);
-    viewer.addPointCloud (resultout.cloud_cylinder, cloud_cylinder_color_handler, cly_id);
-    viewer.addCylinder (*resultout.coefficients_cylinder,cly_id);
-    coefficients_cylinders.push_back(*resultout.coefficients_cylinder);
+		//   // 估计点的法向量
+		//   ne.setSearchMethod (tree);
+		//   ne.setInputCloud (parain.cloud_filtered);
+		//   ne.setKSearch (25);
+		//   ne.compute (*parain.cloud_normals);
+		break;
+	}
+	parain.cloud_filtered=resultout.cloud_filtered2; // 只是给parain指针换了指向的地址，并没有修改原来指针指向的数据。
+	parain.cloud_normals=resultout.cloud_normals2; // 因为每次resultout都是新分配的地址，所以这样指向没有问题
+	times++;
+	std::string cly_id="cloud_cylinder"+std::to_string(times);
+	std::cerr << "圆柱个数: " << cly_id<< std::endl;
+	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_cylinder_color_handler (resultout.cloud_cylinder, 0, 0, 255);
+	viewer.addPointCloud (resultout.cloud_cylinder, cloud_cylinder_color_handler, cly_id);
+	double x0, y0, z0, l, m, n, x1, y1, z1;
+	z1=0.6;
+	x0=resultout.coefficients_cylinder->values[0];
+	y0=resultout.coefficients_cylinder->values[1];
+	z0=resultout.coefficients_cylinder->values[2];
+	l=resultout.coefficients_cylinder->values[3];
+	m=resultout.coefficients_cylinder->values[4];
+	n=resultout.coefficients_cylinder->values[5];
+	x1=(z1-z0)*l/n+x0;
+	y1=(z1-z0)*m/n+y0;
+	resultout.coefficients_cylinder->values[0]=x1;
+	resultout.coefficients_cylinder->values[1]=y1;
+	resultout.coefficients_cylinder->values[2]=z1;
+	if(l<0)
+	{
+		resultout.coefficients_cylinder->values[3]=-l;
+		resultout.coefficients_cylinder->values[4]=-m;
+		resultout.coefficients_cylinder->values[5]=-n;
+	}
+	// resultout.coefficients_cylinder->values[2]=0.6;
+	viewer.addCylinder (*resultout.coefficients_cylinder,cly_id);
+	coefficients_cylinders.push_back(*resultout.coefficients_cylinder);
   }
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> not_found_color_handler (parain.cloud_filtered, 0, 255, 0);
   viewer.addPointCloud (parain.cloud_filtered, not_found_color_handler, "Notfound");
   // viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "cloud_cylinder");
-
-
-  
-
-  while (!viewer.wasStopped ()) { // Display the visualiser until 'q' key is pressed
-    viewer.spinOnce ();
+  while (!viewer.wasStopped ()) 
+  { 
+	// Display the visualiser until 'q' key is pressed
+	viewer.spinOnce ();
   }
   return (0);
 }

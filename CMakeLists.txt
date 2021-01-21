@@ -209,6 +209,8 @@ target_link_libraries (select ${PCL_LIBRARIES})
 
 add_executable (extract_PFH src/extract_PFH.cpp)
 target_link_libraries (extract_PFH ${PCL_LIBRARIES})
+add_executable (extract_FPFH src/extract_FPFH.cpp)
+target_link_libraries (extract_FPFH ${PCL_LIBRARIES})
 
 
 add_executable (cluster_extraction src/cluster_extraction.cpp)
@@ -216,6 +218,16 @@ target_link_libraries (cluster_extraction ${PCL_LIBRARIES})
 
 add_executable (plot_test src/plot_test.cpp)
 target_link_libraries (plot_test ${PCL_LIBRARIES})
+
+add_executable (feature_match src/feature_match.cpp)
+target_link_libraries (feature_match ${PCL_LIBRARIES})
+
+add_executable (keypoint src/keypoint.cpp)
+target_link_libraries (keypoint ${PCL_LIBRARIES})
+
+
+add_executable (example_get_keypoints_indices src/example_get_keypoints_indices.cpp)
+target_link_libraries (example_get_keypoints_indices ${PCL_LIBRARIES})
 # add_executable (feature_matching src/feature_matching.cpp)
 # target_link_libraries (feature_matching ${PCL_LIBRARIES})
 ## Specify libraries to link a library or executable target against
