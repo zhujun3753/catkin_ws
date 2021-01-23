@@ -112,10 +112,14 @@ compute_sift(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,pcl::PointCloud<pcl::Poin
 {
     clock_t start = clock();
 
-    const float min_scale = 0.01f;             //设置尺度空间中最小尺度的标准偏差
-    const int n_octaves = 3;               //设置高斯金字塔组（octave）的数目
-    const int n_scales_per_octave =4;     //设置每组（octave）计算的尺度
-    const float min_contrast = 0.001f;          //设置限制关键点检测的阈值
+    // const float min_scale = 0.01f;             //设置尺度空间中最小尺度的标准偏差
+    // const int n_octaves = 3;               //设置高斯金字塔组（octave）的数目
+    // const int n_scales_per_octave =4;     //设置每组（octave）计算的尺度
+    // const float min_contrast = 0.001f;          //设置限制关键点检测的阈值 0.001f
+    const float min_scale = 0.01f;
+    const int n_octaves = 3;
+    const int n_scales_per_octave = 4;
+    const float min_contrast = 0.001f;
 
     pcl::SIFTKeypoint<pcl::PointXYZ, pcl::PointWithScale> sift;//创建sift关键点检测对象
     pcl::PointCloud<pcl::PointWithScale> result;
@@ -132,6 +136,59 @@ compute_sift(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,pcl::PointCloud<pcl::Poin
     cout << "sift关键点提取时间：" << (double)(end - start) / CLOCKS_PER_SEC <<endl;
     cout << "sift关键点数量" << keypoints->size() << endl;
 }
+void
+compute_sift_normal(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,pcl::PointCloud<pcl::PointXYZ>::Ptr keypoints)
+{
+    clock_t start = clock();
+
+    const float min_scale = 0.01f;             //设置尺度空间中最小尺度的标准偏差
+    const int n_octaves = 3;               //设置高斯金字塔组（octave）的数目
+    const int n_scales_per_octave =4;     //设置每组（octave）计算的尺度
+    const float min_contrast = 0.001f;          //设置限制关键点检测的阈值 0.001f
+
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::PointNormal> ne;
+    pcl::PointCloud<pcl::PointNormal>::Ptr cloud_normals (new pcl::PointCloud<pcl::PointNormal>);
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree_n(new pcl::search::KdTree<pcl::PointXYZ>());
+
+    ne.setInputCloud(cloud);
+    ne.setSearchMethod(tree_n);
+    ne.setRadiusSearch(0.2);
+    ne.compute(*cloud_normals);
+
+    // Copy the xyz info from cloud_xyz and add it to cloud_normals as the xyz field in PointNormals estimation is zero
+    for(std::size_t i = 0; i<cloud_normals->size(); ++i)
+    {
+        (*cloud_normals)[i].x = (*cloud)[i].x;
+        (*cloud_normals)[i].y = (*cloud)[i].y;
+        (*cloud_normals)[i].z = (*cloud)[i].z;
+    }
+
+    // Estimate the sift interest points using normals values from xyz as the Intensity variants
+    pcl::SIFTKeypoint<pcl::PointNormal, pcl::PointWithScale> sift;
+    pcl::PointCloud<pcl::PointWithScale> result;
+    pcl::search::KdTree<pcl::PointNormal>::Ptr tree(new pcl::search::KdTree<pcl::PointNormal> ());
+    sift.setSearchMethod(tree);
+    sift.setScales(min_scale, n_octaves, n_scales_per_octave);
+    sift.setMinimumContrast(min_contrast);
+    sift.setInputCloud(cloud_normals);
+    sift.compute(result);
+
+    // pcl::SIFTKeypoint<pcl::PointXYZ, pcl::PointWithScale> sift;//创建sift关键点检测对象
+    // pcl::PointCloud<pcl::PointWithScale> result;
+    // sift.setInputCloud(cloud);//设置输入点云
+    // pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+    // sift.setSearchMethod(tree);//创建一个空的kd树对象tree，并把它传递给sift检测对象
+    // sift.setScales(min_scale, n_octaves, n_scales_per_octave);//指定搜索关键点的尺度范围
+    // sift.setMinimumContrast(min_contrast);//设置限制关键点检测的阈值
+    // sift.compute(result);//执行sift关键点检测，保存结果在result
+
+    copyPointCloud(result, *keypoints);//将点类型pcl::PointWithScale的数据转换为点类型pcl::PointXYZ的数据
+    clock_t end = clock();
+
+    cout << "sift_normal关键点提取时间：" << (double)(end - start) / CLOCKS_PER_SEC <<endl;
+    cout << "sift_normal关键点数量" << keypoints->size() << endl;
+}
+
 
 // 计算iss特征
 void
@@ -243,7 +300,7 @@ compute_shot(pcl::PointCloud<pcl::PointXYZ>::Ptr keypoints, pcl::PointCloud<pcl:
 
     pcl::SHOTEstimationOMP<PointType, NormalType, DescriptorType> descr_est;
     descr_est.setNumberOfThreads(4);   // 设置线程数 默认为0
-    descr_est.setRadiusSearch (descr_rad_);     //设置搜索半径
+    descr_est.setRadiusSearch (0.5f);     //设置搜索半径
 
     descr_est.setInputCloud (keypoints);  //模型点云的关键点
     descr_est.setInputNormals (normals);  //模型点云的法线
@@ -581,11 +638,14 @@ int main(int argc, char** argv)
     // compute_iss(model,model_keypoint);  
     // compute_iss(scene,scene_keypoint); 
     //  harris关键点
-    // compute_harris(model,model_keypoint);
-    // compute_harris(scene,scene_keypoint);
-    // sift关键点
-    compute_sift(model,model_keypoint);
-    compute_sift(scene,scene_keypoint);
+    compute_harris(model,model_keypoint);
+    compute_harris(scene,scene_keypoint);
+     // sift关键点
+    // compute_sift(model,model_keypoint);
+    // compute_sift(scene,scene_keypoint);
+    // sift_normal关键点
+    // compute_sift_normal(model,model_keypoint);
+    // compute_sift_normal(scene,scene_keypoint);
 
     if(model_keypoint->size()==0||scene_keypoint->size()==0) 
     {
@@ -612,9 +672,9 @@ int main(int argc, char** argv)
     if(model_descriptors_shot->size()>0&&scene_descriptors_shot->size()>0)
         find_match_shot(model_descriptors_shot,scene_descriptors_shot,model_scene_corrs);
     
-    // 位姿估计
-    if(model_descriptors_fpfh->size()>0&&scene_descriptors_fpfh->size()>0)
-        estimationPose(model_keypoint,scene_keypoint,model_descriptors_fpfh,scene_descriptors_fpfh,aligned_model);
+    // // 位姿估计
+    // if(model_descriptors_fpfh->size()>0&&scene_descriptors_fpfh->size()>0)
+    //     estimationPose(model_keypoint,scene_keypoint,model_descriptors_fpfh,scene_descriptors_fpfh,aligned_model);
 
     // 可视化输出
     if(model_scene_corrs->size()>0)

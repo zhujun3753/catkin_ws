@@ -228,6 +228,14 @@ target_link_libraries (keypoint ${PCL_LIBRARIES})
 
 add_executable (example_get_keypoints_indices src/example_get_keypoints_indices.cpp)
 target_link_libraries (example_get_keypoints_indices ${PCL_LIBRARIES})
+
+add_executable (compute_narf src/compute_narf.cpp)
+target_link_libraries (compute_narf ${PCL_LIBRARIES})
+
+add_executable (hypothesis_verification src/hypothesis_verification.cpp)
+target_link_libraries (hypothesis_verification ${PCL_LIBRARIES})
+
+
 # add_executable (feature_matching src/feature_matching.cpp)
 # target_link_libraries (feature_matching ${PCL_LIBRARIES})
 ## Specify libraries to link a library or executable target against

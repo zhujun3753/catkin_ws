@@ -25,7 +25,7 @@ struct CloudStyle
     double r;
     double g;
     double b;
-    double size;
+    double size; // 点的大小
 
     // 使用了构造函数的参数初始化列表，可以只对部分成员变量初始化，这里有个好处是可以使用默认参数,这样结构体就可以赋予默认值
     CloudStyle (double r =0,double g=0, double b=0,double size=0) : r (r),g (g),b (b),size (size){}
@@ -155,6 +155,53 @@ void parseCommandLine (int argc,char *argv[])
 	pcl::console::parse_argument (argc, argv, "--hv_rad_normals", hv_rad_normals_);
 	pcl::console::parse_argument (argc, argv, "--hv_detect_clutter", hv_detect_clutter_);
 }
+void
+visualize_corrs(pcl::PointCloud<pcl::PointXYZ>::Ptr model_keypoints,pcl::PointCloud<pcl::PointXYZ>::Ptr scene_keypoints,
+        pcl::PointCloud<pcl::PointXYZ>::Ptr model,pcl::PointCloud<pcl::PointXYZ>::Ptr scene,
+        pcl::CorrespondencesPtr model_scene_corrs)
+{
+    // 添加关键点
+    pcl::visualization::PCLVisualizer viewer("corrs Viewer");
+    viewer.setBackgroundColor(0, 0, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> model_color(model, 0, 255, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> scene_color(scene, 255, 0, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> model_keypoint_color(model_keypoints, 0, 255, 255);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> scene_keypoint_color(scene_keypoints, 0, 0, 255);
+   viewer.addPointCloud(model, model_color, "model");
+   viewer.addPointCloud(scene, scene_color, "scene");
+    viewer.addPointCloud(model_keypoints, model_keypoint_color, "model_keypoints");
+    viewer.addPointCloud(scene_keypoints, scene_keypoint_color, "scene_keypoints");
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "model_keypoints");
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "scene_keypoints");
+    
+	// 可视化对应关系
+    viewer.addCorrespondences<pcl::PointXYZ>(model_keypoints,scene_keypoints,*model_scene_corrs);
+    viewer.initCameraParameters();
+//    //添加对应关系
+   int i=1;
+//    std::cerr<<"reach here!"<<std::endl;
+//    std::cerr<<model_scene_corrs->size()<<std::endl;
+   for(auto iter=model_scene_corrs->begin();iter!=model_scene_corrs->end();++iter)
+   {
+       std::stringstream ss_line;
+       ss_line << "correspondence_line" << i ;
+    //    std::cerr<<ss_line.str()<<std::endl;
+       i++;
+       PointType& model_point = model_keypoints->at (iter->index_query);  // 从corrs中获取对应点
+       PointType& scene_point = scene_keypoints->at (iter->index_match);
+       viewer.addLine<PointType, PointType> (model_point, scene_point, 255, 0, 0, ss_line.str ());
+       viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 5, ss_line.str ());   // 设置线宽
+   }
+    // std::cerr<<"reach here2!"<<std::endl;
+    // 显示
+    while(!viewer.wasStopped())
+    {
+        viewer.spinOnce(100);
+        boost::this_thread::sleep(boost::posix_time::microseconds(100000));
+    }
+
+}
+
 
 int main (int argc, char *argv[])
 {
@@ -267,14 +314,14 @@ int main (int argc, char *argv[])
   std::cout << "Correspondences found: " << model_scene_corrs->size () << std::endl;
   std::cout << "Model total points: " << model->size () << "; Downsampled points: " << model_downsampled->size () << std::endl;
   std::cout << "Scene total points: " << scene->size () << "; Downsampled points: " << scene_downsampled->size () << std::endl;
-
+  visualize_corrs(model_downsampled,scene_downsampled,model,scene,model_scene_corrs);
   /**
    *  Clustering
    */
   std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > rototranslations;
   std::vector < pcl::Correspondences > clustered_corrs;
 
-  if (use_hough_)
+  if (!use_hough_)
   {
     pcl::PointCloud<RFType>::Ptr model_ref_frame (new pcl::PointCloud<RFType> ());
     pcl::PointCloud<RFType>::Ptr scene_ref_frame (new pcl::PointCloud<RFType> ());
@@ -312,7 +359,7 @@ int main (int argc, char *argv[])
   else
   {
     pcl::GeometricConsistencyGrouping<PointType, PointType> gc_clusterer;
-    gc_clusterer.setGCSize (cg_size_);
+    gc_clusterer.setGCSize (0.01f);  //  float cg_size_ (0.01f);
     gc_clusterer.setInputCloud (model_downsampled);
     gc_clusterer.setSceneCloud (scene_downsampled);
     gc_clusterer.setModelSceneCorrespondences (model_scene_corrs);
@@ -362,6 +409,7 @@ int main (int argc, char *argv[])
       icp.setInputSource (instances[i]);
       pcl::PointCloud<PointType>::Ptr registered (new pcl::PointCloud<PointType>);
       icp.align (*registered);
+      std::cout << "size of :" <<registered->size()<< std::endl;
       registered_instances.push_back (registered);
       std::cout << "Instance " << i << " ";
       if (icp.hasConverged ())
@@ -380,37 +428,37 @@ int main (int argc, char *argv[])
   /**
    * Hypothesis Verification
    */
-  std::cout << "--- Hypotheses Verification ---" << std::endl;
-  std::vector<bool> hypotheses_mask;  // Mask Vector to identify positive hypotheses
+  // std::cout << "--- Hypotheses Verification ---" << std::endl;
+  // std::vector<bool> hypotheses_mask;  // Mask Vector to identify positive hypotheses
 
-  pcl::GlobalHypothesesVerification<PointType, PointType> GoHv;
+  // pcl::GlobalHypothesesVerification<PointType, PointType> GoHv;
 
-  GoHv.setSceneCloud (scene);  // Scene Cloud
-  GoHv.addModels (registered_instances, true);  //Models to verify
-  GoHv.setResolution (hv_resolution_);
-  GoHv.setResolution (hv_occupancy_grid_resolution_);
-  GoHv.setInlierThreshold (hv_inlier_th_);
-  GoHv.setOcclusionThreshold (hv_occlusion_th_);
-  GoHv.setRegularizer (hv_regularizer_);
-  GoHv.setRadiusClutter (hv_rad_clutter_);
-  GoHv.setClutterRegularizer (hv_clutter_reg_);
-  GoHv.setDetectClutter (hv_detect_clutter_);
-  GoHv.setRadiusNormals (hv_rad_normals_);
+  // GoHv.setSceneCloud (scene);  // Scene Cloud
+  // GoHv.addModels (registered_instances, true);  //Models to verify
+  // GoHv.setResolution (hv_resolution_);
+  // GoHv.setResolution (hv_occupancy_grid_resolution_);
+  // GoHv.setInlierThreshold (hv_inlier_th_);
+  // GoHv.setOcclusionThreshold (hv_occlusion_th_);
+  // GoHv.setRegularizer (hv_regularizer_);
+  // GoHv.setRadiusClutter (hv_rad_clutter_);
+  // GoHv.setClutterRegularizer (hv_clutter_reg_);
+  // GoHv.setDetectClutter (hv_detect_clutter_);
+  // GoHv.setRadiusNormals (hv_rad_normals_);
 
-  GoHv.verify ();
-  GoHv.getMask (hypotheses_mask);  // i-element TRUE if hvModels[i] verifies hypotheses
+  // GoHv.verify ();
+  // GoHv.getMask (hypotheses_mask);  // i-element TRUE if hvModels[i] verifies hypotheses
 
-  for (int i = 0; i < hypotheses_mask.size (); i++)
-  {
-    if (hypotheses_mask[i])
-    {
-      std::cout << "Instance " << i << " is GOOD! <---" << std::endl;
-    }
-    else
-    {
-      std::cout << "Instance " << i << " is bad!" << std::endl;
-    }
-  }
+  // for (int i = 0; i < hypotheses_mask.size (); i++)
+  // {
+  //   if (hypotheses_mask[i])
+  //   {
+  //     std::cout << "Instance " << i << " is GOOD! <---" << std::endl;
+  //   }
+  //   else
+  //   {
+  //     std::cout << "Instance " << i << " is bad!" << std::endl;
+  //   }
+  // }
   std::cout << "-------------------------------" << std::endl;
 
   /**
@@ -459,7 +507,8 @@ int main (int argc, char *argv[])
     viewer.addPointCloud (instances[i], instance_color_handler, ss_instance.str ());
     viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, clusterStyle.size, ss_instance.str ());
 
-    CloudStyle registeredStyles = hypotheses_mask[i] ? style_green : style_cyan;
+    // CloudStyle registeredStyles = hypotheses_mask[i] ? style_green : style_cyan;
+    CloudStyle registeredStyles =  style_green ;
     ss_instance << "_registered" << std::endl;
     pcl::visualization::PointCloudColorHandlerCustom<PointType> registered_instance_color_handler (registered_instances[i], registeredStyles.r,
                                                                                                    registeredStyles.g, registeredStyles.b);
