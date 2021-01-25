@@ -12,6 +12,7 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/features/moment_of_inertia_estimation.h>
 #include <Eigen/Core>
+#include <pcl/common/transforms.h>
 
 struct color
 {
@@ -184,9 +185,25 @@ double findCorners (
 int main (int argc, char** argv)
 {
   pcl::PCDReader reader;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>), cloud_f (new pcl::PointCloud<pcl::PointXYZ>);
-  reader.read (argv[1], *cloud);
-  std::cout << "PointCloud before filtering has: " << cloud->size () << " data points." << std::endl; //*
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>), cloud_source (new pcl::PointCloud<pcl::PointXYZ>);
+  reader.read (argv[1], *cloud_source);
+  std::cout << "PointCloud before filtering has: " << cloud_source->size () << " data points." << std::endl; //*
+
+  // 坐标变换
+  float theta = M_PI/4; // The angle of rotation in radians
+  Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+  transform.translation() << 10, 10.0, 0.0;
+  transform.rotate (Eigen::AngleAxisf (theta, Eigen::Vector3f::UnitZ()));
+  printf ("\nMethod #2: using an Affine3f\n");
+  std::cout << transform.matrix() << std::endl;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud (new pcl::PointCloud<pcl::PointXYZ> ());
+  pcl::transformPointCloud (*cloud_source, *transformed_cloud, transform);
+  cloud=transformed_cloud;
+
+  pcl::visualization::PCLVisualizer viewer ("Cluster cloud");
+  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_source_color_handler (cloud, 255, 255, 255);
+  viewer.addPointCloud (cloud_source, cloud_source_color_handler, "original_cloud");
+  viewer.addCoordinateSystem (10.0);
 
   pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
   tree->setInputCloud (cloud);
@@ -199,19 +216,13 @@ int main (int argc, char** argv)
   ne.setKSearch (25);
   ne.compute (*cloud_normals);
 
+  // 欧式聚类
   double eps_angle=M_PI/15;
   float tolerance=0.2;
   std::vector<pcl::PointIndices> clusters;
-  extractEuclideanClusters (*cloud, *cloud_normals, tolerance, tree, cluster_indices, eps_angle,1000,4000);
-
-
-  pcl::visualization::PCLVisualizer viewer ("Cluster cloud");
-  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_filtered_color_handler (cloud, 255, 255, 255);
-  // viewer.addPointCloud (cloud, cloud_filtered_color_handler, "original_cloud");
-  viewer.addCoordinateSystem (10.0);
+  extractEuclideanClusters (*cloud, *cloud_normals, tolerance, tree, cluster_indices, eps_angle,1000,4000); 
   int j = 0;
   std::cout << "Find " << cluster_indices.size () << "  clusters." << std::endl;
-
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_clusters (new pcl::PointCloud<pcl::PointXYZ>);
   for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
   {
@@ -294,6 +305,7 @@ int main (int argc, char** argv)
   float tolerance2=1.5;
   // std::vector<pcl::PointIndices> clusters;
   extractEuclideanClusters (*cloud_clusters, *cloud_normals2, tolerance2, tree2, cluster_indices2, eps_angle2,30000,40000);
+  std::cout << "Find " << cluster_indices2.size () << "  clusters." << std::endl;
   j=0;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster2 (new pcl::PointCloud<pcl::PointXYZ>);
   for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices2.begin (); it != cluster_indices2.end (); ++it)
@@ -335,7 +347,8 @@ int main (int argc, char** argv)
     line_dots<<"line_dot"<<i;
     viewer.addSphere (dot_line,0.4, 1, 0, 0, line_dots.str());
   }
-   viewer.addPointCloud (cloud, cloud_filtered_color_handler, "original_cloud");
+  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_trans_color_handler (cloud, 255, 255, 255);
+   viewer.addPointCloud (cloud, cloud_trans_color_handler, "original_cloud");
 
 
     
