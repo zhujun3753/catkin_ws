@@ -236,6 +236,8 @@ add_executable (hypothesis_verification src/hypothesis_verification.cpp)
 target_link_libraries (hypothesis_verification ${PCL_LIBRARIES})
 
 
+# add_executable (conditional_euclidean_clustering src/conditional_euclidean_clustering.cpp)
+# target_link_libraries (conditional_euclidean_clustering ${PCL_LIBRARIES})
 # add_executable (feature_matching src/feature_matching.cpp)
 # target_link_libraries (feature_matching ${PCL_LIBRARIES})
 ## Specify libraries to link a library or executable target against

@@ -71,7 +71,7 @@ main (int argc, char** argv)
 
   float theta = M_PI/4; // The angle of rotation in radians
   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
-  transform.translation() << 1, 0.0, 0.0;
+  transform.translation() << 10, 10.0, 0.0;
   transform.rotate (Eigen::AngleAxisf (theta, Eigen::Vector3f::UnitZ()));
   printf ("\nMethod #2: using an Affine3f\n");
   std::cout << transform.matrix() << std::endl;

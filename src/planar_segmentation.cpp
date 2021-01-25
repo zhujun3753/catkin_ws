@@ -10,6 +10,8 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/passthrough.h>
+
+
 int main (int argc, char** argv)
 {
   // 读取点云数据

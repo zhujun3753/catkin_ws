@@ -1,3 +1,5 @@
+// 尝试用平面法向量的叉乘，但是失败了。。。。。。。。
+
 #include <pcl/ModelCoefficients.h>
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
@@ -25,10 +27,107 @@ struct color
 };
 struct univect  //  单位向量 
 {
-  double x, y, z;
+  double x, y, z,w;
+  univect(double x=1, double y=0, double z=0, double w=0):x(x),y(y),z(z),w(w){}
+};
+bool ascend (univect a,univect b) { return (a.x<b.x); }
+struct seg_input
+{
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_input ;
+  // pcl::PointCloud<pcl::Normal>::Ptr normal_input ;
+
+  
+};
+struct seg_output
+{
+  bool exist_model;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_model;
+  pcl::ModelCoefficients::Ptr coefficients_model;
+  pcl::PointIndices::Ptr indices_model; 
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_remained ;
+  pcl::PointCloud<pcl::Normal>::Ptr normal_remained ;
+  
 };
 
+seg_output mdl_seg(const seg_input & parain)
+{
+  seg_output  resultout;
+  pcl::PointIndices::Ptr indices_model (new pcl::PointIndices);
+  pcl::ModelCoefficients::Ptr coefficients_model (new pcl::ModelCoefficients);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_model (new pcl::PointCloud<pcl::PointXYZ> ());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_remained (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::Normal>::Ptr normal_remained (new pcl::PointCloud<pcl::Normal>);
+  pcl::SACSegmentationFromNormals<pcl::PointXYZ, pcl::Normal> seg; 
+  pcl::ExtractIndices<pcl::PointXYZ> extract;
+  pcl::ExtractIndices<pcl::Normal> extract_normals;
+  pcl::PCDWriter writer;
 
+  pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+  tree->setInputCloud (parain.cloud_input);
+  pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
+  ne.setSearchMethod (tree);
+  ne.setInputCloud (parain.cloud_input);
+  ne.setKSearch (25);
+  ne.compute (*cloud_normals);
+
+
+  seg.setOptimizeCoefficients (true);
+  seg.setModelType (pcl::SACMODEL_NORMAL_PLANE);
+  seg.setMethodType (pcl::SAC_RANSAC); // 随机抽样一致算法
+    // * SAC_RANSAC - RANdom SAmple Consensus
+    // * SAC_LMEDS - Least Median of Squares
+    // * SAC_MSAC - M-Estimator SAmple Consensus
+    // * SAC_RRANSAC - Randomized RANSAC
+    // * SAC_RMSAC - Randomized MSAC
+    // * SAC_MLESAC - Maximum LikeLihood Estimation SAmple Consensus
+    // * SAC_PROSAC - PROgressive SAmple Consensus
+  seg.setNormalDistanceWeight (0.1); // Set the relative weight (between 0 and 1) to give to the angular distance (0 to pi/2) between point normals and the plane normal.
+  seg.setMaxIterations (10000); 
+  seg.setDistanceThreshold (0.04);
+  if(seg.getMethodType()==pcl::SACMODEL_CYLINDER)
+    seg.setRadiusLimits (0.32, 0.35); // 0.32,0.35
+  seg.setInputCloud (parain.cloud_input);
+  seg.setInputNormals (cloud_normals);
+  seg.segment (*indices_model, *coefficients_model);// Obtain the cylinder inliers and coefficients指向点的索引的指针，并不是指向点的指针
+  
+  extract.setInputCloud (parain.cloud_input);
+  extract.setIndices (indices_model);
+  extract.setNegative (false);
+  extract.filter (*cloud_model);
+  if (cloud_model->points.empty ()) 
+  {
+    std::cerr << "Can't find the model component." << std::endl;
+    resultout.exist_model=false;
+    return resultout;
+  } 
+  else
+  {
+    std::cerr << "model coefficients: " << *coefficients_model << std::endl;
+	  std::cerr << "PointCloud representing the model component: " << cloud_model->size () << " data points." << std::endl;
+    // writer.write ("cloud_model.pcd", *cloud_model, false);
+    resultout.exist_model=true;
+  }
+
+  // 从输入点云中提取去除圆柱点云的数据
+  extract.setNegative (true);
+  extract.filter (*cloud_remained);
+  // 从输入法向量中提取去除圆柱点云法向量的数据
+  extract_normals.setNegative (true);
+  extract_normals.setInputCloud (cloud_normals);
+  extract_normals.setIndices (indices_model);
+  extract_normals.filter (*normal_remained);
+  // std::cerr << "Test end!!!." << std::endl;
+
+  // 下面这些等号是左边的指针指向右边指针所指向的地址，两个指针同时指向一段地址，因此对任意一指针的操作都会影响数据
+  // 好在后面指针的作用域只在此函数，如果在循环中，那很有可能出问题！
+  resultout.coefficients_model=coefficients_model;
+  resultout.indices_model=indices_model;
+  resultout.cloud_remained=cloud_remained;
+  resultout.normal_remained=normal_remained;
+  resultout.cloud_model=cloud_model;
+  return resultout;
+}
 void extractEuclideanClusters (
     const pcl::PointCloud<pcl::PointXYZ> &cloud, const pcl::PointCloud<pcl::Normal> &normals, 
     float tolerance, const pcl::search::Search<pcl::PointXYZ>::Ptr &tree, 
@@ -183,15 +282,27 @@ double findCorners (
 
 int main (int argc, char** argv)
 {
+  // Read in the cloud data
   pcl::PCDReader reader;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>), cloud_f (new pcl::PointCloud<pcl::PointXYZ>);
   reader.read (argv[1], *cloud);
   std::cout << "PointCloud before filtering has: " << cloud->size () << " data points." << std::endl; //*
 
+  
+
+  // Creating the KdTree object for the search method of the extraction
   pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
   tree->setInputCloud (cloud);
 
   std::vector<pcl::PointIndices> cluster_indices;
+  pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+  ec.setClusterTolerance (0.1); // 2cm
+  ec.setMinClusterSize (1000);
+  ec.setMaxClusterSize (25000);
+  ec.setSearchMethod (tree);
+  ec.setInputCloud (cloud);
+  // ec.extract (cluster_indices);
+
   pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
   pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
   ne.setSearchMethod (tree);
@@ -208,28 +319,31 @@ int main (int argc, char** argv)
   pcl::visualization::PCLVisualizer viewer ("Cluster cloud");
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_filtered_color_handler (cloud, 255, 255, 255);
   // viewer.addPointCloud (cloud, cloud_filtered_color_handler, "original_cloud");
-  viewer.addCoordinateSystem (10.0);
+  viewer.addCoordinateSystem (1.0);
   int j = 0;
   std::cout << "Find " << cluster_indices.size () << "  clusters." << std::endl;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_clusters (new pcl::PointCloud<pcl::PointXYZ>);
+  std::vector<univect> normal_vectors;
   for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
   {
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
     for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
       {
         cloud_cluster->push_back ((*cloud)[*pit]); //*
-        // cloud_clusters->push_back ((*cloud)[*pit]); //*
+        cloud_clusters->push_back ((*cloud)[*pit]); //*
       }
     cloud_cluster->width = cloud_cluster->size ();
     cloud_cluster->height = 1;
     cloud_cluster->is_dense = true;
-    // std::cout << "PointCloud representing the Cluster: " << cloud_cluster->size () << " data points." << std::endl;
+    std::cout << "PointCloud representing the Cluster: " << cloud_cluster->size () << " data points." << std::endl;
     std::stringstream ss;
     ss << "cloud_cluster_" << j ;//<< ".pcd";
     // pcl::PCDWriter writer;
     // writer.write<pcl::PointXYZ> (ss.str (), *cloud_cluster, false); //*
     j++;
+    
+    
     // PCL函数计算质心
     Eigen::Vector4f centroid_eigen;					// 质心
     pcl::compute3DCentroid(*cloud_cluster, centroid_eigen);	// 齐次坐标，（c0,c1,c2,1）
@@ -243,7 +357,7 @@ int main (int argc, char** argv)
     moment.getEigenVectors(vx, vy, vz);
     moment.getEigenValues(l1,l2,l3);
     // std::cout<<"Major: "<<l1<<" middle: "<<l2<<" minor:  "<<l3<<std::endl;
-    // std::cout<<"rate: "<<l2/l1<<std::endl;
+    std::cout<<"rate: "<<l2/l1<<std::endl;
     int r,g,b,gap;
     gap=256*256*256/cluster_indices.size () ;
     // std::cout<<"gap"<<gap<<std::endl;
@@ -256,18 +370,24 @@ int main (int argc, char** argv)
     // r=255;
     // g=0;
     // b=0;
-    // pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_cluster_color_handler (cloud_cluster, r, g, b);
-    // viewer.addPointCloud (cloud_cluster, cloud_cluster_color_handler, ss.str ());
-    // std::stringstream centd;
-    // centd<<"centroid"<<j;
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_cluster_color_handler (cloud_cluster, r, g, b);
+    viewer.addPointCloud (cloud_cluster, cloud_cluster_color_handler, ss.str ());
+    std::stringstream centd;
+    centd<<"centroid"<<j;
     // viewer.addSphere (centroid,1.6, 1, 1, 1, centd.str());
-
-    if(l2/l1<=0.5) continue;
-    for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
-      {
-        // cloud_cluster->push_back ((*cloud)[*pit]); //*
-        cloud_clusters->push_back ((*cloud)[*pit]); //*
-      }
+    // 提取平面法线
+    seg_input parain;
+    seg_output resultout;
+    parain.cloud_input=cloud_cluster;
+    resultout=mdl_seg(parain);
+    univect normal_vector;
+    if(resultout.exist_model&&l2/l1>0.5)
+    {
+      normal_vector.x=resultout.coefficients_model->values[0];
+      normal_vector.y=resultout.coefficients_model->values[1];
+      normal_vector.z=resultout.coefficients_model->values[2];
+      normal_vectors.push_back(normal_vector);
+    }
     
 
   }
@@ -277,67 +397,59 @@ int main (int argc, char** argv)
   std::stringstream ss;
   // ss << "cloud_clusters.pcd" ;//<< j ;//<< ".pcd";
   // writer.write<pcl::PointXYZ> (ss.str (), *cloud_clusters, false); //*
-
-  // 二次聚类
+  std::vector<pcl::PointIndices> cluster_indices2;
   pcl::search::KdTree<pcl::PointXYZ>::Ptr tree2 (new pcl::search::KdTree<pcl::PointXYZ>);
   tree2->setInputCloud (cloud_clusters);
-
-  std::vector<pcl::PointIndices> cluster_indices2;
-  pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne2;
-  pcl::PointCloud<pcl::Normal>::Ptr cloud_normals2 (new pcl::PointCloud<pcl::Normal>);
-  ne.setSearchMethod (tree2);
-  ne.setInputCloud (cloud_clusters);
-  ne.setKSearch (25);
-  ne.compute (*cloud_normals2);
-
-  double eps_angle2=M_PI;
-  float tolerance2=1.5;
-  // std::vector<pcl::PointIndices> clusters;
-  extractEuclideanClusters (*cloud_clusters, *cloud_normals2, tolerance2, tree2, cluster_indices2, eps_angle2,30000,40000);
-  j=0;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster2 (new pcl::PointCloud<pcl::PointXYZ>);
-  for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices2.begin (); it != cluster_indices2.end (); ++it)
+  double radius=0.5;
+  // findCorners (*cloud_clusters,  radius, tree2, cluster_indices2);
+  // std::stringstream sphere;
+  // // pcl::console::print_warn("Found %d corner points!!",cluster_indices2[0].indices.size());
+  // for(size_t i=0;i<cluster_indices2[0].indices.size();i++)
+  // {
+  //   sphere<<"sphere"<<i;
+  //   viewer.addSphere (cloud_clusters->points[cluster_indices2[0].indices[i]],radius, 1, 1, 1, sphere.str());
+  // }
+  std::vector<univect> dir_vects;
+  for(int i=0; i<normal_vectors.size()-1;i++)
   {
-    for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
-      {
-        cloud_cluster2->push_back ((*cloud_clusters)[*pit]); //*
-      }
-      j++;
-      std::stringstream ss;
-      ss << "cloud_cluster" << j ;
-      int r,g,b,gap;
-      gap=256*256*128/cluster_indices2.size () ;
-      // std::cout<<"gap"<<gap<<std::endl;
-      r=(j*gap)%256;
-      g=((j*gap)/256)%256;
-      b=(((j*gap)/256)/256)%256;
-      // r=(l2/l1>0.5)?(j*gap)%256:255;
-      // g=(l2/l1>0.5)?((j*gap)/256)%256:255;
-      // b=(l2/l1>0.5)?(((j*gap)/256)/256)%256:255;
-      // r=255;
-      // g=0;
-      // b=0;
-      std::cout << "PointCloud representing the Cluster: " << cloud_cluster2->size () << " data points." << std::endl;
-      pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_cluster_color_handler (cloud_cluster2, r, g, b);
-      viewer.addPointCloud (cloud_cluster2, cloud_cluster_color_handler, ss.str ());
+    for(int j=i+1; j<normal_vectors.size(); j++)
+    {
+      univect dir_vect;
+      dir_vect.x=normal_vectors[i].y*normal_vectors[j].z-normal_vectors[i].z*normal_vectors[j].y;
+      dir_vect.y=normal_vectors[i].z*normal_vectors[j].x-normal_vectors[i].x*normal_vectors[j].z;
+      dir_vect.z=normal_vectors[i].x*normal_vectors[j].y-normal_vectors[i].y*normal_vectors[j].x;
+      double dir_norm=sqrt(dir_vect.x*dir_vect.x+dir_vect.y*dir_vect.y+dir_vect.z*dir_vect.z);
+      if(dir_vect.x<0) dir_norm=-dir_norm;
+      dir_vect.x=dir_vect.x/dir_norm;
+      dir_vect.y=dir_vect.y/dir_norm;
+      dir_vect.z=dir_vect.z/dir_norm;
+      dir_vect.w=fabs(dir_norm);
+      if(dir_vect.w>0.2)
+        dir_vects.push_back(dir_vect);   
+    }
   }
-  pcl::MomentOfInertiaEstimation<pcl::PointXYZ> moment;
-  moment.setInputCloud(cloud_cluster2);
-  moment.compute();
-  Eigen::Vector3f center, vx, vy, vz;
-  float l1,l2,l3;
-  moment.getEigenVectors(vx, vy, vz);
-  moment.getEigenValues(l1,l2,l3);
+  double aver_x=0,aver_y=0,aver_z=0;
+  std::sort(dir_vects.begin(),dir_vects.end(),ascend);
+  for(int i=0; i<dir_vects.size(); i++)
+  {
+    std::cout<<"dir_vector: "<<dir_vects[i].x<<" "<<dir_vects[i].y<<" "<<dir_vects[i].z<<" "<<dir_vects[i].w<<std::endl;
+    aver_x+=dir_vects[i].x;
+    aver_y+=dir_vects[i].y;
+    aver_z+=dir_vects[i].z;
+  }
+  aver_x/=dir_vects.size();
+  aver_y/=dir_vects.size();
+  aver_z/=dir_vects.size();
+  pcl::PointXYZ origin(0,0,0),extreme(aver_x,aver_y,aver_z);
+  viewer.addLine(origin,extreme,"line");
   std::stringstream line_dots;
-  for(int i =-50;i<50;i++)
+  for(int i =1;i<50;i++)
   {
-    pcl::PointXYZ dot_line(vx[0]*i,vx[1]*i,vx[2]*i);
+    pcl::PointXYZ dot_line(aver_x*i,aver_y*i,aver_z*i);
     line_dots<<"line_dot"<<i;
-    viewer.addSphere (dot_line,0.4, 1, 0, 0, line_dots.str());
+    viewer.addSphere (dot_line,0.1, 1, 1, 1, line_dots.str());
   }
-   viewer.addPointCloud (cloud, cloud_filtered_color_handler, "original_cloud");
-
-
+  
     
   while (!viewer.wasStopped ()) 
   { 

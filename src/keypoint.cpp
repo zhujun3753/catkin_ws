@@ -638,11 +638,11 @@ int main(int argc, char** argv)
     // compute_iss(model,model_keypoint);  
     // compute_iss(scene,scene_keypoint); 
     //  harris关键点
-    compute_harris(model,model_keypoint);
-    compute_harris(scene,scene_keypoint);
+    // compute_harris(model,model_keypoint);
+    // compute_harris(scene,scene_keypoint);
      // sift关键点
-    // compute_sift(model,model_keypoint);
-    // compute_sift(scene,scene_keypoint);
+    compute_sift(model,model_keypoint);
+    compute_sift(scene,scene_keypoint);
     // sift_normal关键点
     // compute_sift_normal(model,model_keypoint);
     // compute_sift_normal(scene,scene_keypoint);

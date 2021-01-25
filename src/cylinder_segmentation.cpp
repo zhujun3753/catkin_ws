@@ -30,7 +30,6 @@ struct cyl_seg_output
   pcl::PointCloud<PointT>::Ptr cloud_filtered2 ;
   pcl::PointCloud<pcl::Normal>::Ptr cloud_normals2 ;
   pcl::PointCloud<PointT>::Ptr cloud_cylinder;
-  
 };
 pcl::visualization::PCLPlotter * plot2d(const cyl_seg_input & parain)
 {
