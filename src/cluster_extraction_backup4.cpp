@@ -13,9 +13,6 @@
 #include <pcl/features/moment_of_inertia_estimation.h>
 #include <Eigen/Core>
 #include <pcl/common/transforms.h>
-#include <pcl/filters/passthrough.h>
-
-// 当前还有最边上的没有分割
 
 struct color
 {
@@ -100,7 +97,6 @@ void extractEuclideanClusters (
     // If this queue is satisfactory, add to the clusters
     if (seed_queue.size () >= min_pts_per_cluster && seed_queue.size () <= max_pts_per_cluster)
     {
-      // PCL_WARN("size: %d ", seed_queue.size () );
       pcl::PointIndices r;
       r.indices.resize (seed_queue.size ());
       for (size_t j = 0; j < seed_queue.size (); ++j)
@@ -209,8 +205,11 @@ int main (int argc, char** argv)
   cloud=cloud_source;
 
   pcl::visualization::PCLVisualizer viewer ("Cluster cloud");
-  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_source_color_handler (cloud, 0, 255, 0);
-  viewer.addPointCloud (cloud_source, cloud_source_color_handler, "original_cloud");
+  // pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_source_color_handler (cloud, 0, 255, 0);
+  // viewer.addPointCloud (cloud_source, cloud_source_color_handler, "original_cloud");
+  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_trans_color_handler (cloud, 255, 255, 255);
+   viewer.addPointCloud (cloud, cloud_trans_color_handler, "trans_cloud");
+
   viewer.addCoordinateSystem (10.0);
 
   pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
@@ -228,7 +227,7 @@ int main (int argc, char** argv)
   double eps_angle=M_PI/15;
   float tolerance=0.2;
   std::vector<pcl::PointIndices> clusters;
-  extractEuclideanClusters (*cloud, *cloud_normals, tolerance, tree, cluster_indices, eps_angle,800,4000); 
+  extractEuclideanClusters (*cloud, *cloud_normals, tolerance, tree, cluster_indices, eps_angle,1000,4000); 
   int j = 0;
   std::cout << "Find " << cluster_indices.size () << "  clusters." << std::endl;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_clusters (new pcl::PointCloud<pcl::PointXYZ>);
@@ -269,25 +268,26 @@ int main (int argc, char** argv)
     // r=(j*gap)%256;
     // g=((j*gap)/256)%256;
     // b=(((j*gap)/256)/256)%256;
-    r=(l2/l1>0.1)?(j*gap)%256:255;
-    g=(l2/l1>0.1)?((j*gap)/256)%256:255;
-    b=(l2/l1>0.1)?(((j*gap)/256)/256)%256:255;
+    r=(l2/l1>0.5)?(j*gap)%256:255;
+    g=(l2/l1>0.5)?((j*gap)/256)%256:255;
+    b=(l2/l1>0.5)?(((j*gap)/256)/256)%256:255;
     // r=255;
     // g=0;
     // b=0;
     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_cluster_color_handler (cloud_cluster, r, g, b);
     // viewer.addPointCloud (cloud_cluster, cloud_cluster_color_handler, ss.str ());
+    // std::stringstream centd;
+    // centd<<"centroid"<<j;
+    // viewer.addSphere (centroid,1.6, 1, 1, 1, centd.str());
 
-
-    if(l2/l1<=0.1) continue;
-    std::stringstream centd;
-    centd<<"centroid"<<j;
-    // viewer.addSphere (centroid,1.5, 1, 1, 1, centd.str());
+    if(l2/l1<=0.5) continue;
     for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
       {
         // cloud_cluster->push_back ((*cloud)[*pit]); //*
         cloud_clusters->push_back ((*cloud)[*pit]); //*
       }
+    
+
   }
   cloud_clusters->width = cloud_clusters->size ();
   cloud_clusters->height = 1;
@@ -311,31 +311,21 @@ int main (int argc, char** argv)
   double eps_angle2=M_PI;
   float tolerance2=1.5;
   // std::vector<pcl::PointIndices> clusters;
-  // 调整参数，使得只有想要的部分
-  extractEuclideanClusters (*cloud_clusters, *cloud_normals2, tolerance2, tree2, cluster_indices2, eps_angle2,20000,400000);
+  extractEuclideanClusters (*cloud_clusters, *cloud_normals2, tolerance2, tree2, cluster_indices2, eps_angle2,30000,40000);
   std::cout << "Find " << cluster_indices2.size () << "  clusters." << std::endl;
   j=0;
-  if(cluster_indices2.size ()>1)
-  {
-    PCL_WARN("重新调整参数！！");
-    return 0;
-  }
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster2 (new pcl::PointCloud<pcl::PointXYZ>);
   for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices2.begin (); it != cluster_indices2.end (); ++it)
   {
-    
     for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
       {
         cloud_cluster2->push_back ((*cloud_clusters)[*pit]); //*
       }
-    cloud_cluster2->width = cloud_cluster2->size ();
-    cloud_cluster2->height = 1;
-    cloud_cluster2->is_dense = true;
       j++;
       std::stringstream ss;
       ss << "cloud_cluster" << j ;
       int r,g,b,gap;
-      gap=256*256*255/cluster_indices2.size () ;
+      gap=256*256*128/cluster_indices2.size () ;
       // std::cout<<"gap"<<gap<<std::endl;
       r=(j*gap)%256;
       g=((j*gap)/256)%256;
@@ -348,10 +338,8 @@ int main (int argc, char** argv)
       // b=0;
       std::cout << "PointCloud representing the Cluster: " << cloud_cluster2->size () << " data points." << std::endl;
       pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_cluster_color_handler (cloud_cluster2, r, g, b);
-      // viewer.addPointCloud (cloud_cluster2, cloud_cluster_color_handler, ss.str ());
+      viewer.addPointCloud (cloud_cluster2, cloud_cluster_color_handler, ss.str ());
   }
-  // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster2 (new pcl::PointCloud<pcl::PointXYZ>);
-  
   pcl::MomentOfInertiaEstimation<pcl::PointXYZ> moment;
   moment.setInputCloud(cloud_cluster2);
   moment.compute();
@@ -364,108 +352,13 @@ int main (int argc, char** argv)
   {
     pcl::PointXYZ dot_line(vx[0]*i,vx[1]*i,vx[2]*i);
     line_dots<<"line_dot"<<i;
-    // viewer.addSphere (dot_line,0.4, 1, 0, 0, line_dots.str());
-  }
-  
-  // 得到主方向之后如何调整位置，当前考虑旋转到与y轴重合
-  // 坐标变换
-  Eigen::Vector3f rotate_vect, axis_y(0,1,0);
-  if(vx[1]<0) axis_y[1]=-1;
-  rotate_vect=vx.cross(axis_y); // 叉乘确定旋转向量
-  rotate_vect=rotate_vect/rotate_vect.norm();
-  vx=vx/vx.norm(); // 单位化
-  std::cout<<"主方向: \n"<<vx<<"\n 范数: "<<vx.norm()<<std::endl;
-  std::cout<<"旋转向量: \n"<<rotate_vect<<std::endl;
-  float theta =fabs(acos(vx.dot(axis_y))); // The angle of rotation in radians
-  std::cout<<"旋转角度: \n"<<theta<<std::endl;
-  Eigen::Affine3f transform = Eigen::Affine3f::Identity();
-  transform.translation() << 0.0, 0.0, 0.0;
-  transform.rotate (Eigen::AngleAxisf (theta, rotate_vect));
-  printf ("\nUsing an Affine3f\n");
-  std::cout << transform.matrix() << std::endl;
-  // 对原点云的旋转
-  pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud (new pcl::PointCloud<pcl::PointXYZ> ());
-  pcl::transformPointCloud (*cloud, *transformed_cloud, transform);
-  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_trans_color_handler (cloud, 255, 255, 255);
-  // viewer.addPointCloud (transformed_cloud, cloud_trans_color_handler, "trans_cloud");
-  // 对提取到的平面的旋转
-  pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud_cluster2 (new pcl::PointCloud<pcl::PointXYZ> ());
-  pcl::transformPointCloud (*cloud_cluster2, *transformed_cloud_cluster2, transform);
-  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_cluster2_trans_color_handler (cloud, 255, 255, 255);
-  // viewer.addPointCloud (transformed_cloud_cluster2, cloud_cluster2_trans_color_handler, "trans_cloud_cluster2");
-
-  // 第三次聚类
-  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree3 (new pcl::search::KdTree<pcl::PointXYZ>);
-  tree3->setInputCloud (transformed_cloud_cluster2);
-
-  std::vector<pcl::PointIndices> cluster_indices3;
-  pcl::PointCloud<pcl::Normal>::Ptr cloud_normals3 (new pcl::PointCloud<pcl::Normal>);
-  ne.setSearchMethod (tree3);
-  ne.setInputCloud (transformed_cloud_cluster2);
-  ne.setKSearch (25);
-  ne.compute (*cloud_normals3);
-
-  double eps_angle3=M_PI;
-  float tolerance3=0.2;
-  // std::vector<pcl::PointIndices> clusters;
-   std::cout << "第三次聚类：  "<< std::endl;
-  extractEuclideanClusters (*transformed_cloud_cluster2, *cloud_normals3, tolerance3, tree3, cluster_indices3, eps_angle3,800,6000);
-  std::cout << "Find " << cluster_indices3.size () << "  clusters." << std::endl;
-  j=0;
-  
-  for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices3.begin (); it != cluster_indices3.end (); ++it)
-  {
-    // PCL_WARN("size: %d ", it->indices.size());
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster3 (new pcl::PointCloud<pcl::PointXYZ>);
-    for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
-      {
-        cloud_cluster3->push_back ((*transformed_cloud_cluster2)[*pit]); //*
-      }
-    cloud_cluster3->width = cloud_cluster3->size ();
-    cloud_cluster3->height = 1;
-    cloud_cluster3->is_dense = true;
-      j++;
-      std::stringstream ss;
-      ss << "cloud_cluster3" << j ;
-      int r,g,b,gap;
-      gap=256*256*256/cluster_indices3.size () ;
-      // std::cout<<"gap"<<gap<<std::endl;
-      r=(j*gap)%256;
-      g=((j*gap)/256)%256;
-      b=(((j*gap)/256)/256)%256;
-      // r=(l2/l1>0.5)?(j*gap)%256:255;
-      // g=(l2/l1>0.5)?((j*gap)/256)%256:255;
-      // b=(l2/l1>0.5)?(((j*gap)/256)/256)%256:255;
-      // r=255;
-      // g=0;
-      // b=0;
-      std::cout << "PointCloud representing the Cluster: " << cloud_cluster3->size () << " data points." << std::endl;
-      pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_cluster_color_handler (cloud_cluster3, r, g, b);
-      // viewer.addPointCloud (cloud_cluster3, cloud_cluster_color_handler, ss.str ());
-      // PCL函数计算质心
-    Eigen::Vector4f centroid_eigen;					// 质心
-    pcl::compute3DCentroid(*cloud_cluster3, centroid_eigen);	// 齐次坐标，（c0,c1,c2,1）
-    pcl::PointXYZ centroid(centroid_eigen(0),centroid_eigen(1),centroid_eigen(2));
-    std::stringstream centd;
-    centd<<"centroid3"<<j;
-    // viewer.addSphere (centroid,1.5, 1, 1, 1, centd.str());
-
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_passThrough_filtered (new pcl::PointCloud<pcl::PointXYZ>);
-    pass.setInputCloud (transformed_cloud);
-    pass.setFilterFieldName ("y");
-    pass.setFilterLimits (centroid_eigen(1)-1.3,centroid_eigen(1)+1.3);
-    pass.filter (*cloud_passThrough_filtered);
-    std::stringstream cpt;
-    cpt << "cloud_passThrough" << j ;
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_passThrough_filtered_color_handler (cloud_passThrough_filtered, r, g, b);
-    viewer.addPointCloud (cloud_passThrough_filtered, cloud_passThrough_filtered_color_handler, cpt.str ());
-    pcl::PCDWriter writer;
-    cpt<<".pcd";
-  writer.write<pcl::PointXYZ> (cpt.str (), *cloud_passThrough_filtered, false); //*
-
+    viewer.addSphere (dot_line,0.4, 1, 0, 0, line_dots.str());
   }
 
+  
+
+
+    
   while (!viewer.wasStopped ()) 
   { 
     viewer.spinOnce ();

@@ -407,6 +407,7 @@ int main (int argc, char *argv[])
       icp.setMaxCorrespondenceDistance (icp_corr_distance_);
       icp.setInputTarget (scene);
       icp.setInputSource (instances[i]);
+      // icp.setTransformationEstimation
       pcl::PointCloud<PointType>::Ptr registered (new pcl::PointCloud<PointType>);
       icp.align (*registered);
       std::cout << "size of :" <<registered->size()<< std::endl;

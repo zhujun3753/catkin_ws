@@ -210,7 +210,7 @@ int main (int argc, char** argv)
 
   pcl::visualization::PCLVisualizer viewer ("Cluster cloud");
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_source_color_handler (cloud, 0, 255, 0);
-  viewer.addPointCloud (cloud_source, cloud_source_color_handler, "original_cloud");
+  // viewer.addPointCloud (cloud_source, cloud_source_color_handler, "original_cloud");
   viewer.addCoordinateSystem (10.0);
 
   pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
@@ -228,7 +228,7 @@ int main (int argc, char** argv)
   double eps_angle=M_PI/15;
   float tolerance=0.2;
   std::vector<pcl::PointIndices> clusters;
-  extractEuclideanClusters (*cloud, *cloud_normals, tolerance, tree, cluster_indices, eps_angle,800,4000); 
+  extractEuclideanClusters (*cloud, *cloud_normals, tolerance, tree, cluster_indices, eps_angle,1000,4000); 
   int j = 0;
   std::cout << "Find " << cluster_indices.size () << "  clusters." << std::endl;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_clusters (new pcl::PointCloud<pcl::PointXYZ>);
@@ -266,20 +266,22 @@ int main (int argc, char** argv)
     int r,g,b,gap;
     gap=256*256*256/cluster_indices.size () ;
     // std::cout<<"gap"<<gap<<std::endl;
-    // r=(j*gap)%256;
-    // g=((j*gap)/256)%256;
-    // b=(((j*gap)/256)/256)%256;
-    r=(l2/l1>0.1)?(j*gap)%256:255;
-    g=(l2/l1>0.1)?((j*gap)/256)%256:255;
-    b=(l2/l1>0.1)?(((j*gap)/256)/256)%256:255;
+    r=(j*gap)%256;
+    g=((j*gap)/256)%256;
+    b=(((j*gap)/256)/256)%256;
+    // r=(l2/l1>0.5)?(j*gap)%256:255;
+    // g=(l2/l1>0.5)?((j*gap)/256)%256:255;
+    // b=(l2/l1>0.5)?(((j*gap)/256)/256)%256:255;
     // r=255;
     // g=0;
     // b=0;
     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_cluster_color_handler (cloud_cluster, r, g, b);
-    // viewer.addPointCloud (cloud_cluster, cloud_cluster_color_handler, ss.str ());
+    viewer.addPointCloud (cloud_cluster, cloud_cluster_color_handler, ss.str ());
+    // std::stringstream centd;
+    // centd<<"centroid"<<j;
+    // viewer.addSphere (centroid,1.6, 1, 1, 1, centd.str());
 
-
-    if(l2/l1<=0.1) continue;
+    if(l2/l1<=0.5) continue;
     std::stringstream centd;
     centd<<"centroid"<<j;
     // viewer.addSphere (centroid,1.5, 1, 1, 1, centd.str());
@@ -311,19 +313,12 @@ int main (int argc, char** argv)
   double eps_angle2=M_PI;
   float tolerance2=1.5;
   // std::vector<pcl::PointIndices> clusters;
-  // 调整参数，使得只有想要的部分
-  extractEuclideanClusters (*cloud_clusters, *cloud_normals2, tolerance2, tree2, cluster_indices2, eps_angle2,20000,400000);
+  extractEuclideanClusters (*cloud_clusters, *cloud_normals2, tolerance2, tree2, cluster_indices2, eps_angle2,30000,40000);
   std::cout << "Find " << cluster_indices2.size () << "  clusters." << std::endl;
   j=0;
-  if(cluster_indices2.size ()>1)
-  {
-    PCL_WARN("重新调整参数！！");
-    return 0;
-  }
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster2 (new pcl::PointCloud<pcl::PointXYZ>);
   for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices2.begin (); it != cluster_indices2.end (); ++it)
   {
-    
     for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
       {
         cloud_cluster2->push_back ((*cloud_clusters)[*pit]); //*
@@ -335,7 +330,7 @@ int main (int argc, char** argv)
       std::stringstream ss;
       ss << "cloud_cluster" << j ;
       int r,g,b,gap;
-      gap=256*256*255/cluster_indices2.size () ;
+      gap=256*256*128/cluster_indices2.size () ;
       // std::cout<<"gap"<<gap<<std::endl;
       r=(j*gap)%256;
       g=((j*gap)/256)%256;
@@ -350,8 +345,6 @@ int main (int argc, char** argv)
       pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_cluster_color_handler (cloud_cluster2, r, g, b);
       // viewer.addPointCloud (cloud_cluster2, cloud_cluster_color_handler, ss.str ());
   }
-  // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster2 (new pcl::PointCloud<pcl::PointXYZ>);
-  
   pcl::MomentOfInertiaEstimation<pcl::PointXYZ> moment;
   moment.setInputCloud(cloud_cluster2);
   moment.compute();
@@ -409,7 +402,7 @@ int main (int argc, char** argv)
   float tolerance3=0.2;
   // std::vector<pcl::PointIndices> clusters;
    std::cout << "第三次聚类：  "<< std::endl;
-  extractEuclideanClusters (*transformed_cloud_cluster2, *cloud_normals3, tolerance3, tree3, cluster_indices3, eps_angle3,800,6000);
+  extractEuclideanClusters (*transformed_cloud_cluster2, *cloud_normals3, tolerance3, tree3, cluster_indices3, eps_angle3,1000,6000);
   std::cout << "Find " << cluster_indices3.size () << "  clusters." << std::endl;
   j=0;
   
@@ -454,18 +447,21 @@ int main (int argc, char** argv)
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_passThrough_filtered (new pcl::PointCloud<pcl::PointXYZ>);
     pass.setInputCloud (transformed_cloud);
     pass.setFilterFieldName ("y");
-    pass.setFilterLimits (centroid_eigen(1)-1.3,centroid_eigen(1)+1.3);
+    pass.setFilterLimits (centroid_eigen(1)-1.5,centroid_eigen(1)+1.5);
     pass.filter (*cloud_passThrough_filtered);
     std::stringstream cpt;
     cpt << "cloud_passThrough" << j ;
     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>cloud_passThrough_filtered_color_handler (cloud_passThrough_filtered, r, g, b);
-    viewer.addPointCloud (cloud_passThrough_filtered, cloud_passThrough_filtered_color_handler, cpt.str ());
-    pcl::PCDWriter writer;
-    cpt<<".pcd";
-  writer.write<pcl::PointXYZ> (cpt.str (), *cloud_passThrough_filtered, false); //*
+    // viewer.addPointCloud (cloud_passThrough_filtered, cloud_passThrough_filtered_color_handler, cpt.str ());
 
   }
 
+
+
+  
+
+
+    
   while (!viewer.wasStopped ()) 
   { 
     viewer.spinOnce ();
