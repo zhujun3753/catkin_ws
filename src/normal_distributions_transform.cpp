@@ -62,8 +62,8 @@ filtered_cloud=input_cloud;
   ndt.setInputTarget (target_cloud);
 
   // Set initial alignment estimate found using robot odometry.
-  Eigen::AngleAxisf init_rotation (0.6931, Eigen::Vector3f::UnitZ ());
-  Eigen::Translation3f init_translation (1.79387, 0.720047, 0);
+  Eigen::AngleAxisf init_rotation (0.0, Eigen::Vector3f::UnitZ ());
+  Eigen::Translation3f init_translation (0, 0.720047, 0);
   Eigen::Matrix4f init_guess = (init_translation * init_rotation).matrix ();
 
   // Calculating required rigid transform to align the input cloud to the target cloud.
